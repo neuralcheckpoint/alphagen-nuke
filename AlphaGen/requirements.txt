@@ -1,0 +1,5 @@
+numpy
+OpenImageIO
+av
+Pillow
+websocket-client

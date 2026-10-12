@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 1100 280" width="1100" height="280">
+  <defs>
+    <linearGradient id="word" x1="690" y1="0" x2="990" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9a78ff"/>
+      <stop offset="0.5" stop-color="#ff4fa3"/>
+      <stop offset="1" stop-color="#ffb13d"/>
+    </linearGradient>
+  </defs>
+  <rect width="1100" height="280" rx="36" fill="#0d0a17"/>
+  <image href="icon.png" x="36" y="28" width="224" height="224"/>
+  <text x="300" y="168" font-family="Noto Sans" font-size="124" font-weight="900" letter-spacing="-5">
+    <tspan fill="#f6f2ff">medra</tspan><tspan fill="url(#word)">tools</tspan>
+  </text>
+  <text x="306" y="222" font-family="Noto Sans" font-size="34" font-weight="500" letter-spacing="6" fill="#8d84a8">AI NODES FOR NUKE</text>
+</svg>

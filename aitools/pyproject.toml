@@ -1,0 +1,14 @@
+[project]
+name = "aitools-engine"
+version = "1.0.0"
+description = "Engine-side code shared by the Rafa Tools AI nodes for Nuke"
+requires-python = ">=3.10"
+# torch comes from each tool's own CUDA install.
+dependencies = ["numpy", "OpenImageIO"]
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["aitools_engine"]

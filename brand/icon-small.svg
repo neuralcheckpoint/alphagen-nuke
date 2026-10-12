@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- icon.svg simplified for 16-32 px: thicker pipe, bigger nodes, no checker or glow. -->
+  <defs>
+    <linearGradient id="pipe" x1="48" y1="204" x2="208" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#9a78ff"/>
+      <stop offset="0.55" stop-color="#ff4fa3"/>
+      <stop offset="1" stop-color="#ffb13d"/>
+    </linearGradient>
+  </defs>
+  <rect width="256" height="256" rx="60" fill="#191230"/>
+  <polyline points="56,200 56,70 128,150 200,70 200,200" fill="none" stroke="url(#pipe)" stroke-width="40"
+            stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#ffffff" stroke="#191230" stroke-width="10">
+    <circle cx="56" cy="70" r="26"/>
+    <circle cx="200" cy="70" r="26"/>
+    <circle cx="128" cy="150" r="26"/>
+  </g>
+</svg>

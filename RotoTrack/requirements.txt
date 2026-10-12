@@ -1,0 +1,9 @@
+# torch and torchvision come from the CUDA index in setup.sh
+numpy
+OpenImageIO
+hydra-core
+iopath
+pillow
+tqdm
+scipy
+pytest
