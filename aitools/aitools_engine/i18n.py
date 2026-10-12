@@ -23,6 +23,26 @@ def language():
 
 PT = {
     # Nuke panel
+    "Input": "Entrada",
+    "Subjects": "Sujeitos",
+    "Advanced": "Avançado",
+    "About": "Sobre",
+    "Without points Alpha Gen picks the subject itself.<br>"
+    "To choose: Analyze people once (~15 s), then drag a point onto each person to keep. "
+    "Tick exclude to drop one.<br>"
+    "A point off the people (a prop, someone missed) is a SAM click: check it with Preview selection (red).":
+        "Sem pontos, o Alpha Gen escolhe o sujeito sozinho.<br>"
+        "Para escolher: Analisar pessoas uma vez (~15 s) e arraste um ponto sobre cada pessoa a manter. "
+        "Marque excluir para tirar uma.<br>"
+        "Um ponto fora das pessoas (um objeto, alguém não encontrado) é um clique do SAM: confira com Prévia da seleção (vermelho).",
+    "LTX-2.5 Alpha Gen matte; apply it as the alpha of the original plate.<br>"
+    "Subject points need the optional SAM 2.1 setup (~1.2 GB, separate CUDA environment). "
+    "The SAM mask only crops the matte; it cannot recover a missed subject.<br>"
+    "Long shots run in overlapping chunks of up to 121 frames with blended boundaries.":
+        "Matte do LTX-2.5 Alpha Gen; use-o como alpha do plate original.<br>"
+        "Os pontos de sujeito precisam da instalação opcional do SAM 2.1 (~1,2 GB, ambiente CUDA separado). "
+        "A máscara do SAM só recorta o matte; não recupera um sujeito perdido.<br>"
+        "Planos longos rodam em blocos sobrepostos de até 121 quadros, com transições mescladas.",
     "output": "saída",
     "processing resolution": "resolução de processamento",
     "source": "origem",

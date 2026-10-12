@@ -6,6 +6,8 @@
 
 Optional **Subject points** let you choose who is kept: one click on a person selects the whole person, and the shot is tracked with SAM 2.1.
 
+![Alpha Gen node panel](docs/node-panel.png)
+
 ## What it does
 
 Left: plate. Middle: Alpha Gen matte. Right: the plate keyed over green with that matte. Automatic subject selection, 544 px, seed 1234, no manual cleanup.
@@ -79,7 +81,8 @@ The Nuke side is a Python plugin built on a small shared helper, `aitools`, that
 - 144-frame forward/reverse smoke test at 544 px with Subject points and overlap: 364 s on a 24 GB RTX 3090 with other processes holding memory. The effective budget was about 7.7 GiB; sampled peaks were 7,774 MiB for ComfyUI and 1,352 MiB for SAM (run one after the other), with 115 MiB free at the tightest sample. **This is not a test on a physical 8 GB GPU.**
 - Small decode tiles against the original cache on a 72-frame test: mean MAE 0.0059, 2.8% of pixels differing by more than 0.05. Contours, hair and props change; do not assume equal quality.
 - A single click on a gun selected both actors' guns in one test; the largest SAM candidate can also join subjects that touch. Use **Preview selection**.
-- Not verified: a physical 8 GB GPU, Windows, a from-scratch CUDA install and SAM download, and quality on a long continuous shot.
+- Verified on a clean Linux account: `install` (engine and ComfyUI environments, Nuke menu) and the node loading in Nuke 17.1; `check` correctly reports the missing weights.
+- Not verified: a physical 8 GB GPU, Windows, the 40 GB model download and the SAM download from scratch, and quality on a long continuous shot.
 - Nuke 17.1 crashed (SIGSEGV in the native OpenEXR reader) when Python `node.sample()` ran while the Viewer was rendering the EXRs. The cause is not isolated. Avoid scripted sampling of a live Viewer.
 - Do not start other ComfyUI generations during Compute; the queue check is not an atomic reservation.
 - Full-HD (1920x1088) inference is documented for H100/B200-class GPUs.

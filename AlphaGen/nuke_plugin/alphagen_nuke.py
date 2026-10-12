@@ -186,6 +186,7 @@ def _add_subject_knobs(node, number):
     node.addKnob(exclude)
 
     hit = nuke.Int_Knob("subject_hit_{}".format(number), "")
+    hit.clearFlag(nuke.STARTLINE)
     hit.setVisible(False)  # person of the map under the point; 0 = none, SAM tracks the click
     node.addKnob(hit)
 
@@ -330,31 +331,35 @@ def subject_knob_changed(node, knob):
         refresh_selection(node)
 
 
+def _section(group, name, label, closed=False):
+    """Heading line, or a collapsible group (closed by default) for settings most shots never touch."""
+    if closed:
+        group.addKnob(nuke.Tab_Knob(name, label, nuke.TABBEGINCLOSEDGROUP))
+    else:
+        group.addKnob(nuke.Text_Knob(name, "<b>{}</b>".format(label)))
+
+
+def _end_section(group, name):
+    group.addKnob(nuke.Tab_Knob(name, "", nuke.TABENDGROUP))
+
+
 def _add_knobs(group):
     group.addKnob(nuke.Tab_Knob("alphagen", "Alpha Gen"))
-    output = nuke.Enumeration_Knob("output", tr("output"), OUTPUTS)
-    output.setTooltip(tr("Put the generated matte in rgba.alpha or in a node-specific layer."))
-    group.addKnob(output)
-    resolution = nuke.Enumeration_Knob(
-        "resolution", tr("processing resolution"), [label for label, _ in RESOLUTIONS]
+    # Run first: status and the two actions stay on screen however many points a shot has.
+    group.addKnob(nuke.Text_Knob("status", tr("status"), tr("not computed")))
+    compute = nuke.PyScript_Knob(
+        "compute", tr("Compute"), "import alphagen_nuke; alphagen_nuke.compute(nuke.thisNode())",
     )
-    resolution.setTooltip(tr(
-        "Short edge used by Alpha Gen. 544 is the safe starting point on a 24 GB GPU; "
-        "a Subject + overlap simulation had a 7.7 GiB backend budget (7.3 GiB free plus 0.44 GiB resident). "
-        "A physical 8 GB GPU was not tested; 32 GB of host RAM is a cautious starting point. "
-        "Higher settings use substantially more VRAM."
-    ))
-    group.addKnob(resolution)
-    low_vram = nuke.Boolean_Knob("low_vram", tr("small VAE tiles"))
-    low_vram.setTooltip(tr(
-        "Automatic on physical GPUs up to 8 GB. Enable this on larger GPUs constrained by other apps. "
-        "Small tiles can change matte edges; the unchecked 24 GB path keeps the original decode."
-    ))
-    group.addKnob(low_vram)
-    group.addKnob(nuke.Int_Knob("seed", "seed"))
-    group["seed"].setValue(1234)
-    group["seed"].setTooltip(tr("Fixed seed keeps recomputes reproducible."))
+    compute.setFlag(nuke.STARTLINE)
+    group.addKnob(compute)
+    recompute = nuke.PyScript_Knob(
+        "recompute", tr("Recompute all"), "import alphagen_nuke; alphagen_nuke.compute(nuke.thisNode(), force=True)",
+    )
+    recompute.clearFlag(nuke.STARTLINE)
+    group.addKnob(recompute)
 
+
+    _section(group, "divider_input", tr("Input"))
     source = nuke.Enumeration_Knob("source_mode", tr("source"), SOURCES)
     source.setTooltip(tr(
         "Auto reads a connected Read sequence directly. Otherwise, or with Render input, "
@@ -372,17 +377,16 @@ def _add_knobs(group):
     )
     from_input.clearFlag(nuke.STARTLINE)
     group.addKnob(from_input)
-    cache = nuke.File_Knob("cache_pattern", "cache")
-    cache.setTooltip(tr("EXR sequence written by Compute; empty uses a folder beside the script."))
-    group.addKnob(cache)
+    output = nuke.Enumeration_Knob("output", tr("output"), OUTPUTS)
+    output.setTooltip(tr("Put the generated matte in rgba.alpha or in a node-specific layer."))
+    group.addKnob(output)
 
-    group.addKnob(nuke.Text_Knob("divider_subjects", ""))
-    group.addKnob(nuke.Text_Knob("subjects_label", tr("subjects"), tr(
-        "No point: Alpha Gen picks the subject itself.<br>"
-        "1. Analyze people (once, ~15 s): finds and tracks everyone on this frame; they show faintly.<br>"
-        "2. Drag a point onto a person: the selection updates at once, outlined in its colour.<br>"
-        "Exclude on a point drops that person. Points off the people (props, someone not found) "
-        "are SAM clicks: check them with Preview selection (red)."
+    _section(group, "divider_subjects", tr("Subjects"))
+    group.addKnob(nuke.Text_Knob("subjects_label", "", tr(
+        "Without points Alpha Gen picks the subject itself.<br>"
+        "To choose: Analyze people once (~15 s), then drag a point onto each person to keep. "
+        "Tick exclude to drop one.<br>"
+        "A point off the people (a prop, someone missed) is a SAM click: check it with Preview selection (red)."
     )))
     analyze = nuke.PyScript_Knob(
         "analyze_people", tr("Analyze people"),
@@ -393,9 +397,11 @@ def _add_knobs(group):
     group.addKnob(analyze)
     for name in ("analysis_pattern", "preview_subjects_json"):
         hidden = nuke.String_Knob(name, "")
+        hidden.clearFlag(nuke.STARTLINE)  # hidden knobs must not break the button row
         hidden.setVisible(False)
         group.addKnob(hidden)
     fresh = nuke.Boolean_Knob("preview_fresh", "")
+    fresh.clearFlag(nuke.STARTLINE)
     fresh.setVisible(False)
     group.addKnob(fresh)
     preview_button = nuke.PyScript_Knob(
@@ -409,6 +415,7 @@ def _add_knobs(group):
     show.setTooltip(tr("Shows the selection over this node's output. Turn it off before rendering."))
     group.addKnob(show)
     preview_cache = nuke.File_Knob("preview_pattern", "")
+    preview_cache.clearFlag(nuke.STARTLINE)
     preview_cache.setVisible(False)
     group.addKnob(preview_cache)
     add = nuke.PyScript_Knob(
@@ -436,28 +443,42 @@ def _add_knobs(group):
     for number in range(1, MAX_POINTS + 1):
         _add_subject_knobs(group, number)
 
-    group.addKnob(nuke.Text_Knob("divider_compute", ""))
-    group.addKnob(nuke.Text_Knob("status", tr("status"), tr("not computed")))
-    compute = nuke.PyScript_Knob(
-        "compute", tr("Compute"), "import alphagen_nuke; alphagen_nuke.compute(nuke.thisNode())",
-    )
-    compute.setFlag(nuke.STARTLINE)
-    group.addKnob(compute)
-    recompute = nuke.PyScript_Knob(
-        "recompute", tr("Recompute all"), "import alphagen_nuke; alphagen_nuke.compute(nuke.thisNode(), force=True)",
-    )
-    recompute.clearFlag(nuke.STARTLINE)
-    group.addKnob(recompute)
 
-    group.addKnob(nuke.Text_Knob("divider_info", ""))
+    _section(group, "advanced", tr("Advanced"), closed=True)
+    resolution = nuke.Enumeration_Knob(
+        "resolution", tr("processing resolution"), [label for label, _ in RESOLUTIONS]
+    )
+    resolution.setTooltip(tr(
+        "Short edge used by Alpha Gen. 544 is the safe starting point on a 24 GB GPU; "
+        "a Subject + overlap simulation had a 7.7 GiB backend budget (7.3 GiB free plus 0.44 GiB resident). "
+        "A physical 8 GB GPU was not tested; 32 GB of host RAM is a cautious starting point. "
+        "Higher settings use substantially more VRAM."
+    ))
+    group.addKnob(resolution)
+    low_vram = nuke.Boolean_Knob("low_vram", tr("small VAE tiles"))
+    low_vram.setTooltip(tr(
+        "Automatic on physical GPUs up to 8 GB. Enable this on larger GPUs constrained by other apps. "
+        "Small tiles can change matte edges; the unchecked 24 GB path keeps the original decode."
+    ))
+    group.addKnob(low_vram)
+    group.addKnob(nuke.Int_Knob("seed", "seed"))
+    group["seed"].setValue(1234)
+    group["seed"].setTooltip(tr("Fixed seed keeps recomputes reproducible."))
+
+    cache = nuke.File_Knob("cache_pattern", "cache")
+    cache.setTooltip(tr("EXR sequence written by Compute; empty uses a folder beside the script."))
+    group.addKnob(cache)
+
+    _end_section(group, "advanced_end")
+
+    _section(group, "about", tr("About"), closed=True)
     group.addKnob(nuke.Text_Knob("info", "", tr(
-        "LTX-2.5 Alpha Gen automatically selects the main subject.<br>"
-        "Subject points use optional SAM 2.1 setup (~1.2 GB of checkpoints plus a separate CUDA environment).<br>"
-        "SAM tracks the chosen subject; without a point, Alpha Gen selects automatically.<br>"
-        "The dilated and softened SAM mask only crops the Alpha Gen matte; it cannot recover a missed subject.<br>"
-        "Use the generated matte as the alpha of the original plate.<br>"
-        "Long shots are processed in overlapping chunks of up to 121 frames with blended boundaries."
+        "LTX-2.5 Alpha Gen matte; apply it as the alpha of the original plate.<br>"
+        "Subject points need the optional SAM 2.1 setup (~1.2 GB, separate CUDA environment). "
+        "The SAM mask only crops the matte; it cannot recover a missed subject.<br>"
+        "Long shots run in overlapping chunks of up to 121 frames with blended boundaries."
     )))
+    _end_section(group, "about_end")
     version = nuke.Int_Knob("alphagen_version", "")
     version.setValue(NODE_VERSION)
     version.setVisible(False)
