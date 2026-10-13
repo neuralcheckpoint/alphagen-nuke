@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-13",
+  "gpu": "RTX 3090 24 GB",
+  "backend": "ComfyUI 0.38.1, PyTorch 2.14.0+cu130",
+  "shot": "Tears of Steel TOS_050_0020",
+  "frames": [
+    1001,
+    1072
+  ],
+  "seed": 1234,
+  "fps": 24,
+  "source_size": [
+    1920,
+    1012
+  ],
+  "measurements": [
+    {
+      "name": "economical",
+      "resolution": 544,
+      "small_tiles": true,
+      "seconds": 61.364616345003014,
+      "result": 72,
+      "gpu_memory_peak_mib": 23060,
+      "decode_tiles": [
+        256,
+        64,
+        32,
+        8
+      ]
+    },
+    {
+      "name": "manual544",
+      "resolution": 544,
+      "small_tiles": false,
+      "seconds": 59.04109851800604,
+      "result": 72,
+      "gpu_memory_peak_mib": 23520,
+      "decode_tiles": [
+        512,
+        64,
+        128,
+        32
+      ]
+    },
+    {
+      "name": "quality",
+      "resolution": 768,
+      "small_tiles": false,
+      "seconds": 123.77755552000599,
+      "result": 72,
+      "gpu_memory_peak_mib": 22942,
+      "decode_tiles": [
+        512,
+        64,
+        128,
+        32
+      ]
+    }
+  ],
+  "gpu_memory_note": "Whole-GPU sampled usage at 0.5 s, includes backend cached weights and unrelated desktop apps; not isolated process peaks. Backend not restarted between runs.",
+  "nuke": {
+    "nuke": "17.1v1",
+    "new_node": true,
+    "presets": true,
+    "command": true,
+    "save_reload": true,
+    "legacy_upgrade": true
+  },
+  "economy_vs_quality": {
+    "frames": 72,
+    "finite_and_in_range": true,
+    "mean_absolute_difference": 0.007026020327531215,
+    "mean_fraction_over_005": 0.03311704139447006
+  }
+}

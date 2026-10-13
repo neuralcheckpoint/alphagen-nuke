@@ -24,6 +24,7 @@ RESOLUTIONS = [
 ]
 OUTPUTS = ["alpha", "Alpha Gen layer"]
 SOURCES = ["Auto", "Render input"]
+QUALITY_PROFILES = ["Manual", "Economy (544)", "Quality (768)"]
 SUBJECT_POINT = re.compile(r"^subject_point_(\d+)$")
 MAX_POINTS = 8
 
@@ -330,6 +331,12 @@ def subject_knob_changed(node, knob):
         return  # Nuke also invokes knobChanged while detaching a deleted node.
     if not active:
         return
+    if knob.name() == "quality_profile":
+        manual = int(knob.getValue()) == 0
+        for name in ("resolution", "low_vram"):
+            if name in node.knobs():
+                node[name].setEnabled(manual)
+        return
     if knob.name().startswith(("subject_id_", "subject_exclude_")):
         refresh_selection(node)
         return
@@ -376,6 +383,7 @@ def _add_knobs(group):
     recompute.clearFlag(nuke.STARTLINE)
     group.addKnob(recompute)
     add_backend_knobs(group)
+    add_quality_knob(group)
 
     _section(group, "divider_input", tr("Input"))
     source = nuke.Enumeration_Knob("source_mode", tr("source"), SOURCES)
@@ -513,6 +521,36 @@ def is_alphagen(node):
 
 def range_from_input(node):
     aitools_nuke.range_from_input(node, TITLE)
+
+
+def add_quality_knob(node):
+    """Old nodes keep their saved resolution and tile override in Manual mode."""
+    if "quality_profile" in node.knobs():
+        return
+    knob = nuke.Enumeration_Knob("quality_profile", tr("quality profile"), QUALITY_PROFILES)
+    knob.setTooltip(tr(
+        "Economy: 544 with small VAE tiles. Quality: 768 with larger VAE tiles, using more VRAM. "
+        "Manual uses the Advanced settings. GPUs up to 8 GB still use small tiles automatically. "
+        "Both presets use tiled decode; quality depends on the plate."
+    ))
+    node.addKnob(knob)
+
+
+def processing_settings(node):
+    profile = int(node["quality_profile"].getValue()) if "quality_profile" in node.knobs() else 0
+    if profile == 1:
+        return 544, True
+    if profile == 2:
+        return 768, False
+    return (RESOLUTIONS[int(node["resolution"].getValue())][1],
+            bool(node["low_vram"].value()) if "low_vram" in node.knobs() else False)
+
+
+def upgrade_quality_nodes():
+    for node in nuke.allNodes("Group", recurseGroups=True):
+        if is_alphagen(node):
+            add_quality_knob(node)
+            subject_knob_changed(node, node["quality_profile"])
 
 
 def add_backend_knobs(node):
@@ -822,12 +860,12 @@ def compute(node, force=False, wait=False):
     cache_layer = node.node("CacheLayer")
     if cache_layer is not None:
         cache_layer["channels"].setValue(layer)
-    resolution = RESOLUTIONS[int(node["resolution"].getValue())][1]
+    resolution, low_vram = processing_settings(node)
     command = build_command(
         python, input_pattern, cache_pattern, first, last,
         float(nuke.root()["fps"].value()), resolution,
         int(node["seed"].value()), layer, force or rendered, subjects=subjects,
-        low_vram=bool(node["low_vram"].value()) if "low_vram" in node.knobs() else False,
+        low_vram=low_vram,
         id_map=id_map,
     )
     job = aitools_nuke.EngineJob(

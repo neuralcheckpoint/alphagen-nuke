@@ -45,6 +45,13 @@ PT = {
         "Planos longos rodam em blocos sobrepostos de até 121 quadros, com transições mescladas.",
     "output": "saída",
     "processing resolution": "resolução de processamento",
+    "quality profile": "perfil de qualidade",
+    "Economy: 544 with small VAE tiles. Quality: 768 with larger VAE tiles, using more VRAM. "
+    "Manual uses the Advanced settings. GPUs up to 8 GB still use small tiles automatically. "
+    "Both presets use tiled decode; quality depends on the plate.":
+        "Economy: 544 com blocos pequenos de VAE. Quality: 768 com blocos maiores, usando mais VRAM. "
+        "Manual usa os ajustes Avançados. GPUs de até 8 GB continuam usando blocos pequenos automaticamente. "
+        "Os dois perfis decodificam em blocos; a qualidade depende do plate.",
     "source": "origem",
     "frame range": "intervalo de quadros",
     "from input": "da entrada",

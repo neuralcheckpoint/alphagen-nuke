@@ -53,7 +53,7 @@ Restart Nuke after step 1. **Uninstall:** remove the two `# Medratools` lines fr
 
 1. With the backend running, add **Medratools > Alpha Gen** after a plate.
 2. Leave **source** on Auto for a connected Read; choose Render input to include upstream nodes.
-3. Set the frame range. Start with **544** processing resolution.
+3. Set the frame range and **quality profile**. Choose **Quality (768)** for more processing detail, or **Economy (544)** for smaller VAE decode tiles. **Manual** (the default) keeps the resolution and tile settings in Advanced.
 4. Optional: in **Subjects**, press **+ point** and drag the point onto the person or object you want, on the frame where you place it. **+ subject** adds another subject, **exclude** leaves an area out, and **Preview selection** tints the tracked selection in the output so you can check it before the expensive step. Turn **show preview** off before rendering.
 5. Press **Compute**. The first run after starting the backend loads ~40 GB of weights before the first step.
 6. Use the matte as the alpha of the original plate and refine it where needed. **Recompute all** ignores the cache.
@@ -63,6 +63,20 @@ Restart Nuke after step 1. **Uninstall:** remove the two `# Medratools` lines fr
 CLI (this is what the node runs): `python -m alphagen --input plate.####.exr --output alpha.####.exr --first 1001 --last 1072 --subject 1001 640 300`. `--subject FRAME X Y` is repeatable; X and Y are plate pixels from the top-left.
 
 The panel and installer follow the system language (English or Portuguese). Set `MEDRATOOLS_LANG` to `pt` or `en` to force one.
+
+### Quality profiles
+
+| Profile | Processing short edge | VAE decode |
+| --- | --- | --- |
+| Manual | Advanced setting: 544, 768 or 1088 | Advanced small-tile override; automatic small tiles on GPUs up to 8 GB |
+| Economy (544) | 544 | 256 px / 32-frame tiles |
+| Quality (768) | 768 | 512 px / 128-frame tiles on GPUs above 8 GB; automatic small tiles on smaller GPUs |
+
+The presets ignore the disabled Advanced resolution/tile controls without changing their saved values. Switching back to Manual restores their use. Existing nodes receive the selector when the script is opened and stay in Manual, so old projects keep their settings. Resolution and tiles already participate in the cache fingerprint: changing the effective settings recomputes the matte, while an unchanged profile can reuse its cache.
+
+Quality increases the detail available to the model; it does not guarantee a better matte on every plate or try to fill VRAM. Both profiles still use tiled decoding. On the tested RTX 3090, Quality resolved more fine hair strands in the inspected frames, with a longer processing time. See the [72-frame comparison and measurements](docs/quality-profiles.md). Leave other ComfyUI generations idle; if memory runs out, use Economy or Manual at 544. 1088 remains a Manual setting and was not validated in this comparison.
+
+The CLI uses the same existing controls: Economy is `--resolution 544 --low-vram`; Quality is `--resolution 768` without `--low-vram`.
 
 ### Selecting a whole person with one click (optional)
 
