@@ -347,6 +347,62 @@ def test_click_grows_to_the_clicked_persons_joints():
     assert pipeline.person.expand(clicks, [], mask) == clicks
 
 
+def test_missed_person_does_not_grow_into_an_overlapping_detected_person():
+    mask = np.ones((100, 200), bool)
+    detected = {"box": [0, 0, 180, 100], "joints": [[20, 20], [20, 60], [30, 90]]}
+    clicks = [(170, 20, 1)]
+    assert pipeline.person.expand(clicks, [detected], mask) == clicks
+
+
+def test_clicked_person_is_chosen_by_click_proximity_not_joint_count():
+    mask = np.ones((100, 200), bool)
+    left = {"box": [0, 0, 180, 100], "joints": [[20, 20], [20, 60], [30, 90]]}
+    right = {"box": [100, 0, 200, 100], "joints": [[170, 20]]}
+    clicks = [(170, 20, 1)]
+    assert pipeline.person.expand(clicks, [left, right], mask)[1] == (170, 20, 1)
+
+
+def test_one_include_with_excludes_still_seeds_a_whole_object():
+    from unittest.mock import MagicMock
+
+    masks = np.zeros((3, 8, 16), bool)
+    masks[0, :, :8] = True
+    masks[1, 2:4, 2:4] = True
+    masks[2, 1:5, 1:5] = True
+    predictor = MagicMock()
+    predictor.predict.return_value = masks, np.ones(3), masks
+    assert np.array_equal(pipeline.subject._seed_mask(predictor, [(2, 2, 1), (12, 2, 0)]), masks[0])
+    assert predictor.predict.call_args.kwargs["multimask_output"] is True
+    assert predictor.predict.call_args.kwargs["point_labels"].tolist() == [1, 0]
+
+
+def test_person_refinement_does_not_union_back_excluded_pixels(monkeypatch):
+    mask = np.ones((8, 16), bool)
+    refined = mask.copy()
+    refined[:, 8:] = False
+    body = [(2, 2, 1), (3, 3, 1), (12, 2, 0)]
+    monkeypatch.setattr(pipeline.person, "expand", lambda *_args: body)
+    monkeypatch.setattr(pipeline.subject, "_seed_mask", lambda *_args: refined)
+    assert np.array_equal(pipeline.subject._person_mask(None, [(2, 2, 1)], [], mask), refined)
+    body.pop()
+    assert np.array_equal(pipeline.subject._person_mask(None, [(2, 2, 1)], [], mask), mask)
+
+
+def test_explicit_excludes_reach_body_refinement_unchanged(monkeypatch):
+    body = np.ones((100, 100), bool)
+    detected = {"box": [0, 0, 100, 100], "joints": [[20, 40], [20, 80]]}
+    clicks = [(20, 20, 1), (90, 20, 0)]
+    calls = []
+
+    def seed(_predictor, points):
+        calls.append(points)
+        return body
+
+    monkeypatch.setattr(pipeline.subject, "_seed_mask", seed)
+    assert np.array_equal(pipeline.subject._person_mask(None, clicks, [detected], body), body)
+    assert calls == [clicks + [(20, 40, 1), (20, 80, 1)]]
+
+
 def test_input_video_is_padded_and_has_silent_audio(tmp_path):
     pattern = str(tmp_path / "plate.####.exr")
     _write_exr(frame_path(pattern, 1001), np.full((8, 16, 3), 0.18, dtype=np.float32))
@@ -384,7 +440,46 @@ def test_person_map_keeps_only_the_picked_people(monkeypatch, tmp_path):
         pipeline.run(input_pattern, 1001, 1001, output_pattern, config=config, id_map=id_map)
 
 
+def test_analysis_seeds_sam_with_the_detected_box():
+    from unittest.mock import MagicMock
+
+    predictor = MagicMock()
+    mask = np.ones((1, 8, 16), bool)
+    predictor.predict.return_value = mask, np.ones(1), mask
+    target = {"box": [1, 2, 14, 7], "joints": []}
+    assert np.array_equal(pipeline.subject._detected_mask(predictor, target), mask[0])
+    assert predictor.predict.call_args.kwargs["box"].tolist() == target["box"]
+    assert predictor.predict.call_args.kwargs["multimask_output"] is False
+
+
+def test_analysis_recovers_head_accessory_without_adding_distant_pixels(monkeypatch):
+    from unittest.mock import MagicMock
+
+    mask = np.zeros((1, 12, 16), bool)
+    mask[0, 2:11, 4:10] = True
+    extra = np.ones((12, 16), bool)
+    predictor = MagicMock()
+    predictor.predict.return_value = mask, np.ones(1), mask
+    monkeypatch.setattr(pipeline.subject, "_seed_mask", lambda *_args: extra)
+    target = {"box": [2, 1, 12, 10], "joints": [[7, 2]]}
+    result = pipeline.subject._detected_mask(predictor, target)
+    assert result[2, 11]  # accessory beside the head
+    assert not result[8, 11]  # no growth around the body
+    assert not result[2, 14]  # no growth outside this person's box
+
+
 def test_one_detected_person_is_prompted_with_its_joints_against_the_others():
     first = {"box": [0, 0, 10, 100], "joints": [[5, 10], [5, 50]]}
     second = {"box": [50, 0, 60, 100], "joints": [[55, 10]]}
     assert pipeline.person.prompts(first, [first, second]) == [(5, 10, 1), (5, 50, 1), (55, 10, 0)]
+
+
+def test_hole_inside_a_person_is_filled_but_not_the_gap_between_people():
+    pytest.importorskip("scipy")
+    ids = np.zeros((9, 12), np.float32)
+    ids[1:8, 1:5] = 1
+    ids[3:5, 2:4] = 0  # lens-sized hole
+    ids[1:8, 6:10] = 2
+    pipeline.subject._fill_person_holes(ids)
+    assert ids[3, 2] == 1 and ids[4, 3] == 1
+    assert ids[4, 5] == 0  # the gap between people stays empty

@@ -258,6 +258,24 @@ PT = {
     "Preview selection is only needed for points off the people.":
         "{}: todos os pontos estão em pessoas analisadas, cuja seleção já aparece; "
         "a Prévia da seleção só é necessária para pontos fora das pessoas.",
+    "Start backend": "Ligar backend",
+    "Stop backend": "Desligar backend",
+    "Check backend": "Verificar backend",
+    "press Check backend": "clique em Verificar backend",
+    "backend online": "backend ligado",
+    "backend offline": "backend desligado",
+    "starting backend...": "ligando backend...",
+    "stopping backend...": "desligando backend...",
+    "Stop the shared ComfyUI backend? It will only stop if its queue is idle.":
+        "Desligar o backend ComfyUI compartilhado? Só será desligado se a fila estiver vazia.",
+    "Install comfy-cli to control the backend from Nuke":
+        "Instale comfy-cli para controlar o backend pelo Nuke",
+    "Backend did not reach the requested state; check comfy logs":
+        "O backend não atingiu o estado solicitado; confira comfy logs",
+    "The backend port is occupied by an unexpected HTTP service":
+        "A porta do backend está ocupada por um serviço HTTP inesperado",
+    "{}: no subject is selected; add an include point or reset points for automatic selection.":
+        "{}: nenhum sujeito selecionado; adicione um ponto de inclusão ou limpe os pontos para seleção automática.",
     "The person map does not cover {}-{}; press Analyze people again":
         "O mapa de pessoas não cobre {}-{}; clique em Analisar pessoas de novo",
     "Person detection needs ComfyUI's YOLOv10 and ViTPose models in models/detection":

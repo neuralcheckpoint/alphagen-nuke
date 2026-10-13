@@ -14,6 +14,7 @@ from . import pipeline
 def main(argv=None):
     parser = argparse.ArgumentParser(prog="alphagen", description=__doc__)
     parser.add_argument("--check", action="store_true", help="check ComfyUI/model/workflow without queuing GPU work")
+    parser.add_argument("--backend", choices=("start", "stop", "status"), help="control the local ComfyUI backend")
     parser.add_argument("--input", help="source EXR pattern, e.g. plate.####.exr")
     parser.add_argument("--output", help="alpha EXR pattern, e.g. cache/alpha.####.exr")
     parser.add_argument("--first", type=int)
@@ -64,6 +65,10 @@ def main(argv=None):
             subjects.extend(json.loads(args.subjects_json))
         except (ValueError, TypeError):
             parser.error(tr("--subjects-json must be a JSON list"))
+
+    if args.backend:
+        from . import backend
+        return run_cli(args.json_progress, lambda report: backend.control(args.backend, progress=report), "")
 
     if args.check:
         try:

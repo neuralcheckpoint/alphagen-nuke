@@ -239,15 +239,25 @@ def _object_mask(masks):
 def _seed_mask(predictor, clicks):
     import numpy as np
 
-    single = len(clicks) == 1
+    single = sum(label for _x, _y, label in clicks) == 1
     masks, _scores, _logits = predictor.predict(
         point_coords=np.asarray([[x, y] for x, y, _label in clicks], dtype=np.float32),
         point_labels=np.asarray([label for _x, _y, label in clicks], dtype=np.int32),
         multimask_output=single,
     )
-    # One click: whole object, not SAM's highest-IoU body-part candidate.
-    # Several clicks/excludes already disambiguate, so SAM's single answer is used.
+    # One include still needs whole-object candidates even when exclusions are present.
     return (_object_mask(masks) if single else masks[0]) > 0
+
+
+def _person_mask(predictor, clicks, found, mask):
+    from alphagen import person
+
+    body = person.expand(clicks, found, mask)
+    if len(body) == len(clicks):
+        return mask
+    refined = _seed_mask(predictor, body)
+    # The initial mask already uses explicit excludes, but not other people's detected joints.
+    return refined if any(not label for _x, _y, label in body[len(clicks):]) else mask | refined
 
 
 def _worker(input_pattern, first, last, output_pattern, subjects, size, detector=None):
@@ -290,10 +300,7 @@ def _worker(input_pattern, first, last, output_pattern, subjects, size, detector
                         except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
                             print("Person detection unavailable, using the clicks alone: {}".format(exc), flush=True)
                             found = detector = []
-                    body = person.expand(clicks, found, mask)
-                    if len(body) > len(clicks):
-                        # The click's own mask keeps what joints miss (hair, props held up to the face).
-                        mask = mask | _seed_mask(seed_predictor, body)
+                    mask = _person_mask(seed_predictor, clicks, found, mask)
                 tracker.predictor.add_new_mask(state, frame_idx=key - first, obj_id=object_id, mask=mask)
             del seed_predictor
 
@@ -321,6 +328,34 @@ def _worker(input_pattern, first, last, output_pattern, subjects, size, detector
         raise RuntimeError("SAM 2.1 did not return {} frames (first missing index {})".format(
             len(missing), missing[0]
         ))
+
+
+def _detected_mask(predictor, target):
+    import numpy as np
+
+    masks, _scores, _logits = predictor.predict(
+        box=np.asarray(target["box"], dtype=np.float32), multimask_output=False,
+    )
+    mask = masks[0] > 0
+    if target["joints"]:
+        x, y = target["joints"][0]
+        head = _seed_mask(predictor, [(x, y, 1)])
+        left, top, right, bottom = target["box"]
+        rows, columns = np.ogrid[:mask.shape[0], :mask.shape[1]]
+        # Limit the extra candidate to the head area, not another body or a distant prop.
+        head &= (columns >= left) & (columns <= right) & (rows >= top) & (rows < top + (bottom - top) / 3)
+        mask |= head
+    return mask
+
+
+def _fill_person_holes(ids):
+    """Give each person the holes fully inside them (a lens, a buckle); ids is edited in place."""
+    import numpy as np
+    from scipy.ndimage import binary_fill_holes
+
+    for number in np.unique(ids[ids > 0]):
+        ids[binary_fill_holes(ids == number) & (ids == 0)] = number
+    return ids
 
 
 def _analyze(input_pattern, first, last, output_pattern, key, size, detector):
@@ -359,7 +394,7 @@ def _analyze(input_pattern, first, last, output_pattern, key, size, detector):
             seed_predictor = SAM2ImagePredictor(tracker.predictor)
             seed_predictor.set_image(rgb)
             for object_id, target in enumerate(found, 1):
-                mask = _seed_mask(seed_predictor, person.prompts(target, found))
+                mask = _detected_mask(seed_predictor, target)
                 tracker.predictor.add_new_mask(state, frame_idx=key - first, obj_id=object_id, mask=mask)
             del seed_predictor
 
@@ -371,6 +406,7 @@ def _analyze(input_pattern, first, last, output_pattern, key, size, detector):
                     probabilities = torch.sigmoid(logits.float())[:, 0].cpu().numpy()
                     ids = np.asarray(list(object_ids), dtype=np.float32)[probabilities.argmax(axis=0)]
                     ids[probabilities.max(axis=0) < 0.5] = 0.0
+                    _fill_person_holes(ids)
                     imageio.write_channels(
                         imageio.frame_path(output_pattern, frame_numbers[index]), plate, {ID_LAYER: ids}, SOFTWARE,
                     )

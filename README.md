@@ -58,6 +58,8 @@ Restart Nuke after step 1. **Uninstall:** remove the two `# Medratools` lines fr
 5. Press **Compute**. The first run after starting the backend loads ~40 GB of weights before the first step.
 6. Use the matte as the alpha of the original plate and refine it where needed. **Recompute all** ignores the cache.
 
+7. No terminal needed for the backend: the node panel has **Start backend**, **Stop backend** and **Check backend** buttons (they use the installed `comfy` CLI, so `comfy-cli` must be on your PATH). Stop refuses while the ComfyUI queue is busy. From a shell: `python -m alphagen --backend start|stop|status`. Nodes saved before this version get the buttons from `alphagen_nuke.add_backend_knobs(node)`.
+
 CLI (this is what the node runs): `python -m alphagen --input plate.####.exr --output alpha.####.exr --first 1001 --last 1072 --subject 1001 640 300`. `--subject FRAME X Y` is repeatable; X and Y are plate pixels from the top-left.
 
 The panel and installer follow the system language (English or Portuguese). Set `MEDRATOOLS_LANG` to `pt` or `en` to force one.
@@ -65,6 +67,17 @@ The panel and installer follow the system language (English or Portuguese). Set 
 ### Selecting a whole person with one click (optional)
 
 SAM alone answers a click on a face with the face. If ComfyUI's `models/detection/` holds `yolov10m.onnx` and `vitpose-l-wholebody.onnx`, the clicked person's body joints become extra include points and other people's joints become excludes, so one click selects the whole person (about 3 s on the CPU per preview). The installer does not fetch these two files. Without them, clicks alone seed SAM. Props held by the person are not covered by the joints; click them too.
+
+### Picking people from a person map
+
+**Analyze people** finds everyone on the current frame (YOLOv10 + SAM 2.1, seeded with the detected boxes) and tracks each person through the range into a numbered map. After that, selecting is instant, with no SAM run:
+
+- Drag a point onto a person and they are kept; each person can have their own point, and every kept person stays a separate ID.
+- Tick **exclude** on a point to take that person out. With only exclude points the result is *everyone but them*; with include points it is what you included minus what you excluded.
+- Points off the map are ordinary SAM prompts.
+- If every point ends up excluded, Compute stops with a message instead of silently falling back to automatic selection.
+
+Accessories such as a monocle are recovered with a head candidate seeded on the key frame, and holes fully enclosed by one person are filled. The accessory is only guaranteed near the key frame; in profile, or with a hand in front, tracking can lose it. Re-analyze after changing the plate, range or version.
 
 ## How it was built
 

@@ -269,7 +269,7 @@ def _update_hit(node, number):
     with node:
         people = nuke.toNode("PeopleLayer")
         try:
-            value = people.sample("subjects.id", x, y, 1, 1, frame) if people is not None else 0.0
+            value = people.sample("subjects.id", int(x) + 0.5, int(y) + 0.5, frame=frame) if people is not None else 0.0
         except (RuntimeError, ValueError):
             value = 0.0
     node["subject_hit_{}".format(number)].setValue(int(round(value)))
@@ -280,13 +280,31 @@ def _hit(node, number):
     return int(knob.value()) if knob is not None else 0
 
 
+def _everyone(node):
+    """Every person of the analysis, numbered 1..n like the map."""
+    try:
+        manifest = os.path.join(os.path.dirname(node["analysis_pattern"].value()), "analysis.json")
+        with open(manifest) as handle:
+            return list(range(1, int(json.load(handle)["people"]) + 1))
+    except (OSError, ValueError, KeyError, TypeError):
+        return []
+
+
 def _picked_people(node):
-    """People of the map kept by include points, minus those under exclude points."""
-    kept, dropped = set(), set()
+    """People of the map kept by include points, minus those under exclude points.
+
+    Only exclude points on people means everyone but them.
+    """
+    kept, dropped, sam_include = set(), set(), False
     for number in _active_numbers(node):
         person = _hit(node, number)
+        excluded = node["subject_exclude_{}".format(number)].value()
         if person:
-            (dropped if node["subject_exclude_{}".format(number)].value() else kept).add(person)
+            (dropped if excluded else kept).add(person)
+        elif not excluded:
+            sam_include = True
+    if dropped and not kept and not sam_include:
+        kept = set(_everyone(node))
     return sorted(kept - dropped)
 
 
@@ -357,7 +375,7 @@ def _add_knobs(group):
     )
     recompute.clearFlag(nuke.STARTLINE)
     group.addKnob(recompute)
-
+    add_backend_knobs(group)
 
     _section(group, "divider_input", tr("Input"))
     source = nuke.Enumeration_Knob("source_mode", tr("source"), SOURCES)
@@ -497,6 +515,45 @@ def range_from_input(node):
     aitools_nuke.range_from_input(node, TITLE)
 
 
+def add_backend_knobs(node):
+    if node.knob("backend_state") is not None:
+        return
+    node.addKnob(nuke.Text_Knob("backend_state", "backend", tr("press Check backend")))
+    for action, label in (("start", "Start backend"), ("stop", "Stop backend"), ("status", "Check backend")):
+        button = nuke.PyScript_Knob(
+            "backend_" + action, tr(label),
+            "import alphagen_nuke; alphagen_nuke.control_backend(nuke.thisNode(), {!r})".format(action),
+        )
+        button.setFlag(nuke.STARTLINE) if action == "start" else button.clearFlag(nuke.STARTLINE)
+        node.addKnob(button)
+
+
+def control_backend(node, action):
+    # No source needed to control the backend, so not check_can_compute.
+    if node.fullName() in aitools_nuke.running:
+        nuke.message(tr("{}: {} is already computing.", TITLE, node.fullName()))
+        return None
+    python = aitools_nuke.engine_python(PROJECT_ROOT, "ALPHAGEN_PYTHON")
+    if not os.path.isfile(python):
+        nuke.message(tr("{} engine not installed in:\n{}\nRun the tool's installer first.", TITLE, PROJECT_ROOT))
+        return None
+    if action == "stop" and not nuke.ask(tr("Stop the shared ComfyUI backend? It will only stop if its queue is idle.")):
+        return None
+
+    def on_event(_job, event):
+        if event["event"] == "backend":
+            aitools_nuke.on_main_thread(node["backend_state"].setValue, event["message"])
+
+    def finished(_job, _node):
+        return _node["backend_state"].value()
+
+    job = aitools_nuke.EngineJob(
+        node, [python, "-m", "alphagen", "--backend", action, "--json-progress"], PROJECT_ROOT, TITLE,
+        verb=tr("backend"), on_event=on_event, finished=finished,
+    )
+    return job.start_on(node)
+
+
 def _engine(node):
     python = aitools_nuke.check_can_compute(node, TITLE, PROJECT_ROOT, "ALPHAGEN_PYTHON")
     if python is None:
@@ -563,15 +620,20 @@ def _subjects_for_compute(node, first, last, width, height):
     return subjects
 
 
-def _split_points(subjects, hits):
-    """(SAM prompts, map people) from the panel points: points on a person of the map pick it."""
-    picked = sorted({hit for point, hit in zip(subjects, hits) if hit and point[4]}
-                    - {hit for point, hit in zip(subjects, hits) if hit and not point[4]})
+def _split_points(subjects, hits, everyone=()):
+    """(SAM prompts, map people) from the panel points: points on a person of the map pick it.
+
+    Only exclude points on people (no include anywhere) mean ``everyone`` but them.
+    """
+    included = {hit for point, hit in zip(subjects, hits) if hit and point[4]}
+    dropped = {hit for point, hit in zip(subjects, hits) if hit and not point[4]}
     clicks = [point for point, hit in zip(subjects, hits) if not hit]
+    if dropped and not included and not any(point[4] for point in clicks):
+        included = set(everyone)
     # An exclude off the map only refines SAM clicks of its own subject.
     with_includes = {point[3] for point in clicks if point[4]}
     clicks = [point for point in clicks if point[3] in with_includes]
-    return clicks, picked
+    return clicks, sorted(included - dropped)
 
 
 def _sam_points(node):
@@ -626,8 +688,8 @@ def _range_and_subjects(node):
 def _preview_finished(job, node):
     aitools_nuke.reload_cache(node, "SubjectPreview")
     node["show_preview"].setValue(True)
-    if "preview_fresh" in node.knobs():
-        node["preview_fresh"].setValue(True)
+    if _has_people_map(node):
+        refresh_selection(node)
     return tr("selection preview: {} frames in {:.1f}s (red); press Compute when it looks right",
               job.result["written"], job.result["seconds"])
 
@@ -730,9 +792,15 @@ def compute(node, force=False, wait=False):
     first, last, subjects = values
     id_map = None
     if _has_people_map(node):
-        subjects, people = _split_points(subjects, [_hit(node, number) for number in _active_numbers(node)])
+        had_points = bool(subjects)
+        subjects, people = _split_points(
+            subjects, [_hit(node, number) for number in _active_numbers(node)], _everyone(node),
+        )
         if people:
             id_map = {"pattern": node["analysis_pattern"].value(), "ids": people}
+        if had_points and not subjects and not people:
+            nuke.message(tr("{}: no subject is selected; add an include point or reset points for automatic selection.", TITLE))
+            return None
 
     python = _engine(node)
     if python is None:

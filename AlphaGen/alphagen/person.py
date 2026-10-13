@@ -52,14 +52,23 @@ def expand(clicks, found, mask):
     """Add the clicked person's joints as includes and everyone else's as excludes.
 
     clicks: [(x, y, label)]; mask: SAM's HxW answer to those clicks alone. The
-    clicked person is the one with most joints inside that mask, so a click on
-    someone the detector missed (no joints there) leaves the clicks unchanged.
+    clicked person must have joints inside that mask and near an include click,
+    so overlap with someone the detector missed does not select a different body.
     """
     def hits(person):
         return sum(bool(mask[int(y), int(x)]) for x, y in person["joints"])
 
-    target = max(found, key=hits, default=None)
-    if target is None or not hits(target):
+    includes = [(x, y) for x, y, label in clicks if label]
+    candidates = [person for person in found if person["joints"] and hits(person)]
+    if not includes or not candidates:
+        return list(clicks)
+
+    def distance(person):
+        return min(math.hypot(x - tx, y - ty) for x, y in includes for tx, ty in person["joints"])
+
+    target = min(candidates, key=distance)
+    # A prop or a missed person can overlap another person's joints without selecting that person.
+    if distance(target) > 0.25 * (target["box"][3] - target["box"][1]):
         return list(clicks)
     return list(clicks) + prompts(target, found)
 
