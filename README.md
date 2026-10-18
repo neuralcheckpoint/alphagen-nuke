@@ -123,6 +123,6 @@ PYTHONPATH=../aitools python -m pytest -q tests
 
 ## Licenses
 
-- This repository's own code: see the license file once one is added.
+- This repository's own code: Apache-2.0, see [LICENSE](LICENSE).
 - The LTX-2.5 model and the Alpha Gen adapter are under the [LTX-2 Community License](https://github.com/Lightricks/LTX-2/blob/main/LICENSE-2_x). They are not distributed here; you accept the terms with Lightricks when downloading. Commercial use by an entity with annual revenue of US$10 million or more requires a paid license from Lightricks.
 - SAM 2.1 source and configs (`RotoTrack/vendor/sam2`) and the checkpoints are Apache-2.0, Meta/FAIR. No weights are included.
